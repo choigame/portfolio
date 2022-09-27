@@ -9,4 +9,22 @@ c.amount = 0.5
 c.segments = 2
 c.tension = 0.5
 
+-- UV_Flatten
+obj_selection = for o in selection where (superClassOf o == GeometryClass) collect o
+if (obj_selection.count == 0) then
+(
+	messageBox ("You must select at least \"1-Geometry\" object to continue.") title:"Invalid Selection..."
 
+)
+	for i=1 to obj_selection.count do
+	(--Begin For Loop
+		clearSelection()
+		select obj_selection[i]
+		
+		max modify mode
+		uv = unwrap_uvw()
+		addModifier obj_selection[i] (uv)
+		uv.flattenMapNoParams()
+		uv.packNoParams()
+		uv.setTVSubObjectMode 0
+	)
