@@ -28,3 +28,9 @@ if (obj_selection.count == 0) then
 		uv.packNoParams()
 		uv.setTVSubObjectMode 0
 	)
+
+-- Utils
+if keyboard.shiftPressed then (
+$.pos = [0,0,0] 
+) else
+	for obj in selection do
