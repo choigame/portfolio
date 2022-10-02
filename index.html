@@ -1,8 +1,260 @@
 -- SelftUtils.ms
-https://mega.nz/file/qiJTGZAD#NZBaSgD5vEqg2IKdLwuGvpPbYr63BHoVLOOtdMArNME
+macroScript TanUtils
+ButtonText:"TanUtils"
+category:"TanUtils"
+(
+    
+Global Standard_Mat = #(2,4,9,5,7)
+Global Pivot_Mode = 1
 
--- bga_quadrifyall_v1.2.ms
-https://mega.nz/file/u3R0TJrb#vEnX4rPuV2YrRvr78D2RocdC01N-BXn9xuIl32EGqfc
+global theObj
+global theObject
+global theEdges
+global theLoops
+global baseSubLevel
+global currentMod
+global currentModIndex
+
+    
+rollout QiGeRollout "Tan Utils" width:204 height:235
+(
+    
+    button 'btn1' "Pivot" pos:[23,20] width:70 height:22 align:#left
+    button 'btn2' "Chamfer" pos:[106,20] width:70 height:22 align:#left
+    button 'btn3' "Fill Mat" pos:[23,45] width:70 height:22 align:#left
+    button 'btn4' "UV" pos:[106,45] width:70 height:22 align:#left
+    button 'btn5' "Detach" pos:[23,70] width:70 height:22 align:#left
+    button 'btn6' "Planes" pos:[106,70] width:70 height:22 align:#left
+    button 'btn7' "DBox" pos:[23,95] width:70 height:22 align:#left
+
+    on btn1 pressed do
+    (
+        if keyboard.shiftPressed then (
+            $.pos = [0,0,0] 
+        ) else
+           for obj in selection do
+            if Pivot_Mode == 1 then (
+                obj.pivot = obj.center
+                obj.pivot.z = obj.min.z
+                Pivot_Mode = 2
+            ) else if Pivot_Mode == 2 then (
+                obj.Pivot = [0,0,0]
+                Pivot_Mode = 3
+            ) else if Pivot_Mode == 3 then (
+                obj.pivot = obj.center
+                Pivot_Mode = 1
+            ) 
+    )
+    
+    on btn2 pressed do
+    (
+        c = chamfer()
+        addModifier $ c
+        c.amount = 0.35
+        c.segments = 2
+        c.tension = 0.45
+    )
+    
+    on btn3 pressed do
+    (
+        if keyboard.shiftPressed then (
+			$.wirecolor = color 111 111 111
+            $.material=undefined
+			return()
+        ) 
+		
+		mat_name = Max_Name + "_MAT_MR"
+        maps = #("texture_diff.png","texture_metal.png","texture_rough.png","texture_normal.png","texture_alpha.png")
+        Mun = #()
+        for i in maps do (
+            mapsPath = maxfilepath + i
+            if doesFileExist mapsPath then (
+                mapsInfo = getBitmapInfo mapsPath
+                if mapsInfo[5] != 8 then (
+                    Append Mun i
+                )
+            )
+        )
+        If Mun.count == 0 Then (
+            try (
+                if     selection.count == 1 then (
+                    
+                    face_mun = $.EditablePoly.getSelection #Face
+                    if face_mun as string == "#{}" then (
+                        subobjectLevel = 0
+                        face_mat = standard name:mat_name
+                        $.material = face_mat
+                        meditMaterials[1] =face_mat
+                    )else(
+                        subobjectLevel = 0
+                        if $.material == undefined do (
+                            $.material = standard()
+                        )
+                        subobjectLevel = 5
+                        $.EditablePoly.setSelection #Face face_mun
+                        face_mat = standard name:mat_name
+                        $.material = face_mat
+                        meditMaterials[1] =face_mat
+                        subobjectLevel = 0
+                    )
+                    face_mun = $.EditablePoly.setSelection #Face #{}
+                    
+                    if doesFileExist (maxfilepath + "texture_diff.png") ==true then (
+                        meditMaterials[1].diffusemap = Bitmaptexture fileName: (maxfilepath + "texture_diff.png")
+                    )else(
+         --               messagebox "texture_diff.png Miss"
+                    )
+                    if doesFileExist (maxfilepath + "texture_metal.png") ==true then (
+                        meditMaterials[1].specularLevelMap = Bitmaptexture fileName: (maxfilepath + "texture_metal.png")
+                    )else(
+         --               messagebox "texture_metal.png Miss"
+                    )
+                    if doesFileExist (maxfilepath + "texture_rough.png") ==true then (
+                        meditMaterials[1].glossinessmap = Bitmaptexture fileName: (maxfilepath + "texture_rough.png")
+                    )else(
+          --              messagebox "texture_rough.png Miss"
+                    )
+                    if doesFileExist (maxfilepath + "texture_normal.png") ==true then (
+                        meditMaterials[1].bumpmap = Bitmaptexture fileName: (maxfilepath + "texture_normal.png")
+                    )else(
+           --             messagebox "texture_normal.png Miss"
+                    )
+                        
+                    showTextureMap meditMaterials[1] meditMaterials[1].diffusemap on
+                )else(
+                    messagebox "Select a model please!"
+                )
+            )catch(
+               messagebox "Texture error!"
+            )
+        ) else (
+            Messagebox "Please use 8 Bit texture to export!"
+        )
+    )
+    on btn4 pressed do
+    (
+        obj_selection = for o in selection where (superClassOf o == GeometryClass) collect o
+                
+        if (obj_selection.count == 0) then
+        (
+            messageBox ("You must select at least \"1-Geometry\" object to continue.") title:"Invalid Selection..."
+        )
+        for i=1 to obj_selection.count do
+        (       --Begin For Loop
+            clearSelection()
+            select obj_selection[i]
+
+            max modify mode
+            uv = unwrap_uvw()
+            addModifier obj_selection[i] (uv)
+            uv.flattenMapNoParams()
+            uv.packNoParams()
+            uv.setTVSubObjectMode 0 
+        )
+    )
+    
+    on btn5 pressed do
+    (       
+        try destroyDialog rltElementsToObjects catch()
+        local start_objs = objects as array
+        
+        fn detach_elems obj base_name = (
+            if convertToPoly obj != undefined do (
+                while polyOp.getNumFaces obj != 0 do (
+                    local f_list = polyOp.getElementsUsingFace obj #{1}
+                    local elem = polyOp.detachFaces obj f_list asNode:true name:(uniqueName base_name)
+                )
+                delete obj
+            )
+        )
+        
+        fn reset_pivots coll = (
+            centerPivot coll
+            worldAlignPivot coll
+            resetXForm coll
+            convertToPoly coll
+        )
+        
+        fn invert_set coll = (
+            return (for obj in objects where findItem coll obj == 0 collect obj)
+        )
+        
+        local the_name = "detach"
+        local the_objs = for obj in selection where superClassOf obj == geometryClass collect obj
+        for obj in the_objs do detach_elems obj the_name
+        reset_pivots (invert_set start_objs)
+    ) -- btn5 : detach
+
+    on btn6 pressed do
+    (
+		_distance = 500
+		_name = "RefPlane_"
+		_w = 100
+
+		front = getNodeByName (_name + "front")
+		left = getNodeByName (_name + "left")
+		right = getNodeByName (_name + "right")
+		top = getNodeByName (_name + "top")
+		
+		if front != undefined then delete front
+		if left != undefined then delete left
+		if right != undefined then delete right
+		if top != undefined then delete top
+			
+		if keyboard.shiftPressed then (
+			return()
+        ) 
+			
+		c = plane()
+		c.name = _name + "front"
+		c.showFrozenInGray = false
+		c.width = _w
+		c.length = _w
+		c.rotation = eulerAngles -90 0 0
+		c.pos = [0, _distance, 0]
+		
+		c1 = plane()
+		c1.name = _name + "left"
+		c1.showFrozenInGray = false
+		c1.width = _w
+		c1.length = _w
+		c1.rotation = eulerAngles 180 90 0
+		c1.pos = [_distance, 0, 0]
+
+		c2 = plane()
+		c2.name = _name + "right"
+		c2.showFrozenInGray = false
+		c2.width = _w
+		c2.length = _w
+		c2.rotation = eulerAngles 0 -90 0
+		c2.pos = [-_distance, 0, 0]
+
+		c3 = plane()
+		c3.name = _name + "top"
+		c3.showFrozenInGray = false
+		c3.width = _w
+		c3.length = _w
+		c3.rotation = eulerAngles 0 0 0
+		c3.pos = [0 ,0 ,-_distance]
+    )
+    
+    on btn7 pressed do
+    (
+		_w = 200
+		c = box()
+		c.width = _w
+		c.length = _w
+		c.height = _w
+
+		c.pos = [0,0,0] 
+		c.boxMode  = true
+		c.showfrozeningray = false
+    )
+
+    
+)
+CreateDialog QiGeRollout pos:[1450,80]
+)
 
 -- Regularize
 macroScript EditPoly_RegularizeEdgeLoop buttonText:"Regularize(EditPoly)" category:"rapidTools" toolTip:"Regularize Edge Loop (EditPoly)" (
